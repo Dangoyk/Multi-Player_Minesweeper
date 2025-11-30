@@ -1,0 +1,6 @@
+// Example configuration file
+// Copy this to config.js and update with your WebSocket server URL
+// For local development: http://localhost:3001
+// For production: https://your-railway-app.railway.app
+window.__WS_SERVER_URL__ = 'http://localhost:3001';
+

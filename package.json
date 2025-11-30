@@ -6,7 +6,9 @@
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "npx http-server frontend -p 3000",
     "install:backend": "cd backend && npm install",
-    "install:all": "npm run install:backend"
+    "install:all": "npm run install:backend",
+    "build": "node build.js",
+    "build:frontend": "node build.js"
   },
   "keywords": ["minesweeper", "multiplayer", "websocket", "game"],
   "author": "",

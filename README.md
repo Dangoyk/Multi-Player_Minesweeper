@@ -85,41 +85,129 @@ multiplayerminesweeper/
 
 ## Deployment
 
-### Deploy Backend to Railway
+### Step 1: Deploy Backend to Railway
 
-1. Create a new project on [Railway](https://railway.app)
-2. Connect your GitHub repository
-3. Add environment variables:
-   - `PORT`: Railway will set this automatically
-   - `FRONTEND_URL`: Your Vercel deployment URL (e.g., `https://your-app.vercel.app`)
-4. Railway will automatically detect the `railway.json` config and deploy
+1. **Create a Railway account** at [railway.app](https://railway.app) and sign in
 
-### Deploy Frontend to Vercel
+2. **Create a new project**:
+   - Click "New Project"
+   - Select "Deploy from GitHub repo"
+   - Choose your repository
 
-1. Install Vercel CLI:
+3. **Configure the service**:
+   - Railway should auto-detect it's a Node.js project
+   - The `railway.json` config file will handle the build and start commands
+   - Railway will automatically run `npm install` in the backend folder and `npm start`
+
+4. **Add environment variables** in Railway:
+   - Go to your service → Variables tab
+   - Add `FRONTEND_URL` (you'll set this after deploying frontend)
+     - For now, you can use a placeholder like `https://placeholder.vercel.app`
+   - `PORT` is automatically set by Railway (don't set it manually)
+
+5. **Get your Railway URL**:
+   - After deployment, Railway will give you a URL like `https://your-app.railway.app`
+   - Copy this URL - you'll need it for the frontend
+   - **Important**: Make sure to use `https://` not `http://`
+
+### Step 2: Deploy Frontend to Vercel
+
+#### Option A: Using Vercel CLI
+
+1. **Install Vercel CLI** (if not already installed):
    ```bash
    npm i -g vercel
    ```
 
-2. Deploy:
+2. **Login to Vercel**:
    ```bash
-   vercel
+   vercel login
    ```
-   When prompted, set the root directory to `frontend` or configure it in `vercel.json`
 
-3. **Important**: After deployment, you need to manually update the WebSocket URL:
-   - Go to your Vercel project settings
-   - Edit `frontend/index.html` and replace the `window.__WS_SERVER_URL__` value with your Railway backend URL
-   - Or use Vercel's environment variables with a build script to inject it
-   
-   For now, you can manually edit `frontend/index.html` line with:
-   ```javascript
-   window.__WS_SERVER_URL__ = 'https://your-railway-app.railway.app';
+3. **Set environment variable**:
+   ```bash
+   vercel env add WS_SERVER_URL
    ```
-   
-   Then redeploy.
+   When prompted:
+   - Enter your Railway backend URL (e.g., `https://your-app.railway.app`)
+   - Select "Production", "Preview", and "Development" environments
 
-**Note**: For production, consider using a build step to inject environment variables automatically.
+4. **Deploy to Vercel**:
+   ```bash
+   vercel --prod
+   ```
+   Or link your project first:
+   ```bash
+   vercel link
+   vercel --prod
+   ```
+
+#### Option B: Using Vercel Dashboard (Recommended)
+
+1. **Push your code to GitHub** (if not already done)
+
+2. **Go to [vercel.com](https://vercel.com)** and sign in with GitHub
+
+3. **Import your repository**:
+   - Click "Add New Project"
+   - Select your repository
+   - Click "Import"
+
+4. **Configure the project**:
+   - **Framework Preset**: Other
+   - **Root Directory**: Leave as is (or set to project root)
+   - **Build Command**: `npm run build:frontend`
+   - **Output Directory**: `frontend`
+
+5. **Add environment variable**:
+   - Go to Settings → Environment Variables
+   - Add `WS_SERVER_URL` with your Railway backend URL (e.g., `https://your-app.railway.app`)
+   - Select all environments (Production, Preview, Development)
+
+6. **Deploy**:
+   - Click "Deploy"
+   - Vercel will build and deploy your frontend
+
+7. **Get your Vercel URL**:
+   - After deployment, you'll get a URL like `https://your-app.vercel.app`
+   - Copy this URL
+
+8. **Update Railway environment variable**:
+   - Go back to Railway
+   - Update `FRONTEND_URL` to your Vercel URL (e.g., `https://your-app.vercel.app`)
+   - Railway will automatically redeploy with the new URL
+
+### Step 3: Test Your Deployment
+
+1. **Open your Vercel URL** in a browser
+2. **Host a game** and share the room code
+3. **Open another browser/device** and join with the room code
+4. **Test the game** - both players should be able to see each other's cursors and play together
+
+### Troubleshooting
+
+- **WebSocket connection fails**: Make sure `WS_SERVER_URL` in Vercel matches your Railway URL exactly (including `https://`)
+- **CORS errors**: Make sure `FRONTEND_URL` in Railway matches your Vercel URL exactly
+- **Build fails**: Check that `build.js` has Node.js available (Vercel provides it automatically)
+
+1. Go to [vercel.com](https://vercel.com) and sign in with GitHub
+2. Click "Add New Project"
+3. Import your GitHub repository
+4. Configure:
+   - **Root Directory**: Leave as root (or set to project root)
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `frontend`
+5. Add environment variable:
+   - Go to Settings → Environment Variables
+   - Add `WS_SERVER_URL` with your Railway backend URL
+6. Deploy!
+
+### Important Notes
+
+- The build script (`build.js`) automatically injects the `WS_SERVER_URL` environment variable into the HTML
+- Make sure your Railway backend URL doesn't have a trailing slash
+- Both services need to be deployed for the game to work
+- Railway may take a few minutes to deploy on first run
 
 ## Basic Usage
 

@@ -132,12 +132,38 @@ socket.on('game-initialized', (state) => {
     gameStatus.className = 'game-status';
 });
 
-socket.on('cell-revealed', ({ row, col, value, revealed }) => {
+socket.on('cell-revealed', ({ row, col, value, revealed, board }) => {
+    console.log('Received cell-revealed event:', { row, col, value, hasRevealedArray: !!revealed, hasBoard: !!board });
+    if (!gameState) {
+        console.error('No gameState when receiving cell-revealed');
+        return;
+    }
+    
+    // Update board if provided
+    if (board) {
+        gameState.board = board;
+        console.log('Updated board from server');
+    }
+    
+    // Update revealed array
     if (revealed) {
         gameState.revealed = revealed;
-    } else {
+        console.log('Updated entire revealed array, length:', revealed.length);
+    } else if (row !== undefined && col !== undefined) {
+        // Update single cell
+        if (!gameState.revealed) {
+            gameState.revealed = Array(gameState.height).fill(null).map(() => Array(gameState.width).fill(false));
+        }
         gameState.revealed[row][col] = true;
+        console.log('Updated single cell:', { row, col });
     }
+    
+    console.log('Drawing board after cell reveal, gameState:', {
+        hasBoard: !!gameState.board,
+        hasRevealed: !!gameState.revealed,
+        width: gameState.width,
+        height: gameState.height
+    });
     drawBoard();
     drawCursors();
 });

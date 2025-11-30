@@ -195,8 +195,20 @@ io.on('connection', (socket) => {
 
   // Handle cell reveal
   socket.on('reveal-cell', ({ roomCode, row, col }) => {
+    console.log('Received reveal-cell:', { roomCode, row, col });
     const room = rooms.get(roomCode);
-    if (!room || !room.gameState || room.gameState.gameOver) return;
+    if (!room) {
+      console.log('Room not found:', roomCode);
+      return;
+    }
+    if (!room.gameState) {
+      console.log('No gameState in room');
+      return;
+    }
+    if (room.gameState.gameOver) {
+      console.log('Game is over');
+      return;
+    }
     
     const { board, revealed, flagged, width, height, mines } = room.gameState;
     
@@ -229,21 +241,26 @@ io.on('connection', (socket) => {
     }
     
     // Reveal cell with flood fill
+    console.log('Revealing cell with flood fill:', { row, col });
     revealCellRecursive(currentBoard, room.gameState.revealed, row, col, width, height);
+    console.log('Revealed array after flood fill:', room.gameState.revealed);
     
     // Check win condition
     if (checkWin(currentBoard, room.gameState.revealed, room.gameState.flagged, width, height, mines)) {
       room.gameState.gameOver = true;
       room.gameState.won = true;
+      console.log('Game won!');
       io.to(roomCode).emit('game-over', { won: true, board: currentBoard, revealed: room.gameState.revealed });
     } else {
-      // Send update
+      // Send update with full board state
+      console.log('Emitting cell-revealed to room:', roomCode);
       io.to(roomCode).emit('cell-revealed', { 
         row, 
         col, 
         playerId: socket.id,
         value: currentBoard[row][col],
-        revealed: room.gameState.revealed
+        revealed: room.gameState.revealed,
+        board: currentBoard  // Send full board so frontend can update
       });
     }
   });

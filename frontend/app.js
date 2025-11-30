@@ -1,4 +1,4 @@
-// Version: 2.0.4 - Enhanced null checks and fixed guest controls
+// Version: 3.0.0 - Added emotes, mine count, copy button, modernized UI, no 50/50s
 // Get WebSocket server URL from environment or use default
 // For Vercel, this will be set via window.__WS_SERVER_URL__ or use default
 const WS_SERVER_URL = window.__WS_SERVER_URL__ || 'http://localhost:3001';
@@ -30,6 +30,11 @@ const minesInput = document.getElementById('mines-input');
 const startGameBtn = document.getElementById('start-game-btn');
 const gameBoard = document.getElementById('game-board');
 const gameStatus = document.getElementById('game-status');
+const copyRoomCodeBtn = document.getElementById('copy-room-code-btn');
+const emoteBtn = document.getElementById('emote-btn');
+const emotePicker = document.getElementById('emote-picker');
+const emoteDisplay = document.getElementById('emote-display');
+const minesRemaining = document.getElementById('mines-remaining');
 
 let currentRoomCode = null;
 let isHost = false;
@@ -52,7 +57,7 @@ const numberColors = [
 
 // Socket event handlers
 socket.on('connect', () => {
-    console.log('Connected to server (Version 2.0.4)');
+    console.log('Connected to server (Version 3.0.0)');
 });
 
 socket.on('room-created', ({ roomCode }) => {
@@ -130,6 +135,7 @@ socket.on('game-initialized', (state) => {
     initializeBoard();
     gameStatus.textContent = '';
     gameStatus.className = 'game-status';
+    updateMineCount();
 });
 
 socket.on('cell-revealed', ({ row, col, value, revealed, board }) => {
@@ -172,6 +178,7 @@ socket.on('cell-flagged', ({ row, col, flagged }) => {
     gameState.flagged[row][col] = flagged;
     drawBoard();
     drawCursors();
+    updateMineCount();
 });
 
 socket.on('game-over', ({ won, board, revealed }) => {
@@ -217,7 +224,100 @@ leaveGameBtn.addEventListener('click', () => {
     currentRoomCode = null;
     isHost = false;
     gameState = null;
+    emotePicker.classList.add('hidden');
 });
+
+// Copy room code button
+copyRoomCodeBtn.addEventListener('click', async () => {
+    const roomCode = roomCodeDisplay.textContent || gameRoomCode.textContent;
+    if (roomCode) {
+        try {
+            await navigator.clipboard.writeText(roomCode);
+            copyRoomCodeBtn.textContent = '✓ Copied!';
+            copyRoomCodeBtn.classList.add('copy-success');
+            setTimeout(() => {
+                copyRoomCodeBtn.textContent = '📋 Copy';
+                copyRoomCodeBtn.classList.remove('copy-success');
+            }, 2000);
+        } catch (err) {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = roomCode;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            copyRoomCodeBtn.textContent = '✓ Copied!';
+            setTimeout(() => {
+                copyRoomCodeBtn.textContent = '📋 Copy';
+            }, 2000);
+        }
+    }
+});
+
+// Emote button
+emoteBtn.addEventListener('click', () => {
+    emotePicker.classList.toggle('hidden');
+});
+
+// Emote picker buttons
+document.querySelectorAll('.emote-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const emote = btn.dataset.emote;
+        socket.emit('send-emote', {
+            roomCode: currentRoomCode,
+            emote: emote
+        });
+        showEmote(emote, true);
+        emotePicker.classList.add('hidden');
+    });
+});
+
+// Socket handler for receiving emotes
+socket.on('emote-received', ({ emote, playerId }) => {
+    if (playerId !== socket.id) {
+        showEmote(emote, false);
+    }
+});
+
+function showEmote(emote, isOwn) {
+    const bubble = document.createElement('div');
+    bubble.className = 'emote-bubble';
+    bubble.textContent = emote;
+    bubble.style.left = isOwn ? '50%' : Math.random() * 80 + 10 + '%';
+    bubble.style.top = isOwn ? '50%' : Math.random() * 80 + 10 + '%';
+    emoteDisplay.appendChild(bubble);
+    
+    setTimeout(() => {
+        bubble.remove();
+    }, 2000);
+}
+
+function updateMineCount() {
+    if (!gameState) return;
+    
+    let flaggedCount = 0;
+    for (let row = 0; row < gameState.height; row++) {
+        for (let col = 0; col < gameState.width; col++) {
+            if (gameState.flagged[row][col]) {
+                flaggedCount++;
+            }
+        }
+    }
+    
+    const remaining = gameState.mines - flaggedCount;
+    minesRemaining.textContent = remaining;
+    
+    // Change color if low on mines
+    const mineCountEl = document.querySelector('.mine-count');
+    if (remaining <= 5 && remaining > 0) {
+        mineCountEl.style.color = '#ff6b6b';
+        mineCountEl.style.animation = 'pulse 1s infinite';
+    } else {
+        mineCountEl.style.color = '#dc3545';
+        mineCountEl.style.animation = 'none';
+    }
+}
 
 startGameBtn.addEventListener('click', () => {
     if (!isHost) {

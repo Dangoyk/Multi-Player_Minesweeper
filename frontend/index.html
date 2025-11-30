@@ -10,7 +10,7 @@
     <div class="container">
         <header>
             <h1>Multiplayer Minesweeper</h1>
-            <p style="color: #666; font-size: 0.9em; margin-top: 5px;">Version 2.0.4</p>
+            <p style="color: #666; font-size: 0.9em; margin-top: 5px;">Version 3.0.0</p>
         </header>
 
         <!-- Lobby Screen -->
@@ -29,7 +29,12 @@
                 </div>
 
                 <div id="room-info" class="room-info hidden">
-                    <p>Room Code: <strong id="room-code-display"></strong></p>
+                    <div class="room-code-container">
+                        <p>Room Code: <strong id="room-code-display"></strong></p>
+                        <button id="copy-room-code-btn" class="btn btn-icon" title="Copy room code">
+                            📋 Copy
+                        </button>
+                    </div>
                     <p>Share this code with your friend!</p>
                     <p id="waiting-message" class="waiting">Waiting for player to join...</p>
                     <p id="ready-message" class="ready hidden">Both players ready!</p>
@@ -43,9 +48,26 @@
                 <div class="game-info">
                     <span>Room: <strong id="game-room-code"></strong></span>
                     <span id="player-count">Players: 1/2</span>
+                    <span id="mine-count" class="mine-count">💣 <strong id="mines-remaining">40</strong></span>
                 </div>
-                <button id="leave-game-btn" class="btn btn-small">Leave Game</button>
+                <div class="header-actions">
+                    <button id="emote-btn" class="btn btn-icon">😊 Emotes</button>
+                    <button id="leave-game-btn" class="btn btn-small">Leave Game</button>
+                </div>
             </div>
+            
+            <div id="emote-picker" class="emote-picker hidden">
+                <button class="emote-btn" data-emote="😊">😊</button>
+                <button class="emote-btn" data-emote="😮">😮</button>
+                <button class="emote-btn" data-emote="😱">😱</button>
+                <button class="emote-btn" data-emote="🎉">🎉</button>
+                <button class="emote-btn" data-emote="👍">👍</button>
+                <button class="emote-btn" data-emote="👎">👎</button>
+                <button class="emote-btn" data-emote="💥">💥</button>
+                <button class="emote-btn" data-emote="🔥">🔥</button>
+            </div>
+            
+            <div id="emote-display" class="emote-display"></div>
 
             <div class="game-controls">
                 <label>

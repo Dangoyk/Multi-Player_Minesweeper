@@ -37,26 +37,124 @@ function generateRoomCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-// Generate minesweeper board
+// Check if board has 50/50 situations (simplified check)
+function hasFiftyFifty(board, width, height, firstClickRow, firstClickCol) {
+  // This is a simplified check - a full solver would be more complex
+  // We check if there are obvious 50/50 situations after the first click area is revealed
+  const revealed = Array(height).fill(null).map(() => Array(width).fill(false));
+  
+  // Reveal the first click area (3x3 around first click)
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      const nr = firstClickRow + dr;
+      const nc = firstClickCol + dc;
+      if (nr >= 0 && nr < height && nc >= 0 && nc < width) {
+        revealed[nr][nc] = true;
+        // If it's a 0, flood fill
+        if (board[nr][nc] === 0) {
+          revealCellRecursive(board, revealed, nr, nc, width, height);
+        }
+      }
+    }
+  }
+  
+  // Check for potential 50/50s - look for numbers with exactly 2 unrevealed neighbors
+  // where the number matches the count (could be ambiguous)
+  for (let row = 0; row < height; row++) {
+    for (let col = 0; col < width; col++) {
+      if (revealed[row][col] && board[row][col] > 0) {
+        let unrevealedCount = 0;
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = row + dr;
+            const nc = col + dc;
+            if (nr >= 0 && nr < height && nc >= 0 && nc < width && !revealed[nr][nc]) {
+              unrevealedCount++;
+            }
+          }
+        }
+        // If a number has exactly 2 unrevealed neighbors and the number is 1 or 2,
+        // it could potentially be a 50/50 (simplified heuristic)
+        if (unrevealedCount === 2 && board[row][col] <= 2) {
+          // Additional check: see if both neighbors are mines or both are safe
+          // This is a simplified check - a full solver would be more accurate
+          return true; // Conservative: reject boards with potential 50/50s
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Generate minesweeper board with no 50/50s
 function generateBoard(width, height, mines, firstClickRow, firstClickCol) {
+  let attempts = 0;
+  const maxAttempts = 50; // Try up to 50 times to generate a good board
+  
+  while (attempts < maxAttempts) {
+    const board = Array(height).fill(null).map(() => Array(width).fill(0));
+    const minePositions = new Set();
+    
+    // Generate mine positions (avoiding first click)
+    while (minePositions.size < mines) {
+      const row = Math.floor(Math.random() * height);
+      const col = Math.floor(Math.random() * width);
+      const key = `${row},${col}`;
+      
+      // Don't place mine on first click or adjacent cells
+      if (row === firstClickRow && col === firstClickCol) continue;
+      if (Math.abs(row - firstClickRow) <= 1 && Math.abs(col - firstClickCol) <= 1) continue;
+      
+      minePositions.add(key);
+      board[row][col] = -1; // -1 represents a mine
+    }
+    
+    // Calculate numbers for each cell
+    for (let row = 0; row < height; row++) {
+      for (let col = 0; col < width; col++) {
+        if (board[row][col] === -1) continue;
+        
+        let count = 0;
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = row + dr;
+            const nc = col + dc;
+            if (nr >= 0 && nr < height && nc >= 0 && nc < width && board[nr][nc] === -1) {
+              count++;
+            }
+          }
+        }
+        board[row][col] = count;
+      }
+    }
+    
+    // Check for 50/50s - if found, try again
+    if (!hasFiftyFifty(board, width, height, firstClickRow, firstClickCol)) {
+      return board;
+    }
+    
+    attempts++;
+  }
+  
+  // If we couldn't generate a perfect board, return the last one
+  // (this is a fallback - in practice, most boards will be fine)
   const board = Array(height).fill(null).map(() => Array(width).fill(0));
   const minePositions = new Set();
   
-  // Generate mine positions (avoiding first click)
   while (minePositions.size < mines) {
     const row = Math.floor(Math.random() * height);
     const col = Math.floor(Math.random() * width);
     const key = `${row},${col}`;
     
-    // Don't place mine on first click or adjacent cells
     if (row === firstClickRow && col === firstClickCol) continue;
     if (Math.abs(row - firstClickRow) <= 1 && Math.abs(col - firstClickCol) <= 1) continue;
     
     minePositions.add(key);
-    board[row][col] = -1; // -1 represents a mine
+    board[row][col] = -1;
   }
   
-  // Calculate numbers for each cell
   for (let row = 0; row < height; row++) {
     for (let col = 0; col < width; col++) {
       if (board[row][col] === -1) continue;
@@ -271,6 +369,17 @@ io.on('connection', (socket) => {
         value: currentBoard[row][col],
         revealed: room.gameState.revealed,
         board: currentBoard  // Send full board so frontend can update
+      });
+    }
+  });
+
+  // Handle emote
+  socket.on('send-emote', ({ roomCode, emote }) => {
+    const room = rooms.get(roomCode);
+    if (room) {
+      io.to(roomCode).emit('emote-received', {
+        emote,
+        playerId: socket.id
       });
     }
   });

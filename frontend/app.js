@@ -1,4 +1,4 @@
-// Version: 2.0.0 - Full Minesweeper Game Logic
+// Version: 2.0.1 - Fixed game controls visibility and host-only start
 // Get WebSocket server URL from environment or use default
 // For Vercel, this will be set via window.__WS_SERVER_URL__ or use default
 const WS_SERVER_URL = window.__WS_SERVER_URL__ || 'http://localhost:3001';
@@ -52,17 +52,29 @@ const numberColors = [
 
 // Socket event handlers
 socket.on('connect', () => {
-    console.log('Connected to server (Version 2.0.0)');
+    console.log('Connected to server (Version 2.0.1)');
 });
 
 socket.on('room-created', ({ roomCode }) => {
     currentRoomCode = roomCode;
     isHost = true;
     roomCodeDisplay.textContent = roomCode;
+    gameRoomCode.textContent = roomCode;
     roomInfo.classList.remove('hidden');
     waitingMessage.classList.remove('hidden');
     readyMessage.classList.add('hidden');
     playerCount.textContent = 'Players: 1/2';
+    // Host can go to game screen to set up game
+    switchToGameScreen();
+    updateGameControlsVisibility();
+});
+
+socket.on('player-joined', ({ playerId }) => {
+    playerCount.textContent = 'Players: 2/2';
+    waitingMessage.classList.add('hidden');
+    readyMessage.classList.remove('hidden');
+    // Update game controls visibility
+    updateGameControlsVisibility();
 });
 
 socket.on('joined-room', ({ roomCode, isHost: hostStatus }) => {
@@ -71,17 +83,13 @@ socket.on('joined-room', ({ roomCode, isHost: hostStatus }) => {
     gameRoomCode.textContent = roomCode;
     switchToGameScreen();
     playerCount.textContent = 'Players: 2/2';
+    updateGameControlsVisibility();
 });
 
 socket.on('join-error', ({ message }) => {
     alert(message);
 });
 
-socket.on('player-joined', ({ playerId }) => {
-    playerCount.textContent = 'Players: 2/2';
-    waitingMessage.classList.add('hidden');
-    readyMessage.classList.remove('hidden');
-});
 
 socket.on('player-left', ({ playerId }) => {
     playerCount.textContent = 'Players: 1/2';
@@ -95,6 +103,7 @@ socket.on('cursor-update', ({ playerId, x, y }) => {
 });
 
 socket.on('game-initialized', (state) => {
+    console.log('Game initialized:', state);
     gameState = state;
     initializeBoard();
     gameStatus.textContent = '';
@@ -163,7 +172,15 @@ leaveGameBtn.addEventListener('click', () => {
 });
 
 startGameBtn.addEventListener('click', () => {
-    if (!isHost) return;
+    if (!isHost) {
+        console.log('Only host can start the game');
+        return;
+    }
+    
+    if (!currentRoomCode) {
+        console.log('No room code');
+        return;
+    }
     
     const width = parseInt(widthInput.value);
     const height = parseInt(heightInput.value);
@@ -173,6 +190,8 @@ startGameBtn.addEventListener('click', () => {
         alert('Too many mines for the board size!');
         return;
     }
+    
+    console.log('Starting game with:', { roomCode: currentRoomCode, width, height, mines });
     
     socket.emit('init-game', {
         roomCode: currentRoomCode,
@@ -186,6 +205,20 @@ startGameBtn.addEventListener('click', () => {
 function switchToGameScreen() {
     lobbyScreen.classList.remove('active');
     gameScreen.classList.add('active');
+    updateGameControlsVisibility();
+}
+
+function updateGameControlsVisibility() {
+    const gameControls = document.querySelector('.game-controls');
+    if (gameControls) {
+        if (isHost) {
+            gameControls.style.display = 'flex';
+            startGameBtn.disabled = false;
+        } else {
+            gameControls.style.display = 'none';
+            startGameBtn.disabled = true;
+        }
+    }
 }
 
 function switchToLobbyScreen() {

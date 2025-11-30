@@ -1,4 +1,4 @@
-// Version: 2.0.1 - Fixed game controls visibility and host-only start
+// Version: 2.0.2 - Fixed null gameState error in drawBoard
 // Get WebSocket server URL from environment or use default
 // For Vercel, this will be set via window.__WS_SERVER_URL__ or use default
 const WS_SERVER_URL = window.__WS_SERVER_URL__ || 'http://localhost:3001';
@@ -52,7 +52,7 @@ const numberColors = [
 
 // Socket event handlers
 socket.on('connect', () => {
-    console.log('Connected to server (Version 2.0.1)');
+    console.log('Connected to server (Version 2.0.2)');
 });
 
 socket.on('room-created', ({ roomCode }) => {
@@ -99,7 +99,10 @@ socket.on('player-left', ({ playerId }) => {
 
 socket.on('cursor-update', ({ playerId, x, y }) => {
     cursorPositions.set(playerId, { x, y });
-    drawCursors();
+    // Only draw cursors if game is initialized
+    if (gameState) {
+        drawCursors();
+    }
 });
 
 socket.on('game-initialized', (state) => {
@@ -241,11 +244,22 @@ function initializeBoard() {
 }
 
 function drawBoard() {
-    if (!gameState || !gameState.board) {
+    if (!gameState) {
+        // No game state yet, don't draw anything
+        return;
+    }
+    
+    if (!gameState.board) {
         // Draw empty board before first click
         const ctx = gameBoard.getContext('2d');
         const width = gameState.width;
         const height = gameState.height;
+        
+        // Make sure canvas is sized
+        if (gameBoard.width === 0 || gameBoard.height === 0) {
+            gameBoard.width = width * cellSize;
+            gameBoard.height = height * cellSize;
+        }
         
         ctx.clearRect(0, 0, gameBoard.width, gameBoard.height);
         
@@ -325,6 +339,8 @@ function drawBoard() {
 }
 
 function drawCursors() {
+    if (!gameState) return; // Don't draw if no game state
+    
     const ctx = gameBoard.getContext('2d');
     
     // Redraw board first

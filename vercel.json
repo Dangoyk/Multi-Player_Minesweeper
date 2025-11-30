@@ -2,6 +2,8 @@
   "version": 2,
   "buildCommand": "npm run build:frontend",
   "outputDirectory": "frontend",
+  "installCommand": "npm install",
+  "framework": null,
   "rewrites": [
     {
       "source": "/(.*)",

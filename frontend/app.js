@@ -1,4 +1,4 @@
-// Version: 2.0.2 - Fixed null gameState error in drawBoard
+// Version: 2.0.4 - Enhanced null checks and fixed guest controls
 // Get WebSocket server URL from environment or use default
 // For Vercel, this will be set via window.__WS_SERVER_URL__ or use default
 const WS_SERVER_URL = window.__WS_SERVER_URL__ || 'http://localhost:3001';
@@ -52,7 +52,7 @@ const numberColors = [
 
 // Socket event handlers
 socket.on('connect', () => {
-    console.log('Connected to server (Version 2.0.2)');
+    console.log('Connected to server (Version 2.0.4)');
 });
 
 socket.on('room-created', ({ roomCode }) => {
@@ -83,7 +83,14 @@ socket.on('joined-room', ({ roomCode, isHost: hostStatus }) => {
     gameRoomCode.textContent = roomCode;
     switchToGameScreen();
     playerCount.textContent = 'Players: 2/2';
-    updateGameControlsVisibility();
+    // Force update controls visibility immediately
+    setTimeout(() => {
+        updateGameControlsVisibility();
+    }, 0);
+    // Also update after a short delay to ensure DOM is ready
+    setTimeout(() => {
+        updateGameControlsVisibility();
+    }, 100);
 });
 
 socket.on('join-error', ({ message }) => {
@@ -99,15 +106,27 @@ socket.on('player-left', ({ playerId }) => {
 
 socket.on('cursor-update', ({ playerId, x, y }) => {
     cursorPositions.set(playerId, { x, y });
-    // Only draw cursors if game is initialized
-    if (gameState) {
-        drawCursors();
+    // Only draw cursors if game is fully initialized
+    try {
+        if (gameState && typeof gameState.width === 'number' && typeof gameState.height === 'number' && gameState.width > 0 && gameState.height > 0) {
+            drawCursors();
+        }
+    } catch (e) {
+        console.error('Error drawing cursors:', e);
     }
 });
 
 socket.on('game-initialized', (state) => {
     console.log('Game initialized:', state);
     gameState = state;
+    console.log('GameState after init:', {
+        width: gameState.width,
+        height: gameState.height,
+        mines: gameState.mines,
+        hasBoard: !!gameState.board,
+        hasRevealed: !!gameState.revealed,
+        hasFlagged: !!gameState.flagged
+    });
     initializeBoard();
     gameStatus.textContent = '';
     gameStatus.className = 'game-status';
@@ -213,15 +232,27 @@ function switchToGameScreen() {
 
 function updateGameControlsVisibility() {
     const gameControls = document.querySelector('.game-controls');
-    if (gameControls) {
-        if (isHost) {
-            gameControls.style.display = 'flex';
+    if (!gameControls) {
+        console.warn('Game controls element not found');
+        return;
+    }
+    
+    if (isHost) {
+        gameControls.style.display = 'flex';
+        gameControls.classList.remove('hidden');
+        if (startGameBtn) {
             startGameBtn.disabled = false;
-        } else {
-            gameControls.style.display = 'none';
+            startGameBtn.style.display = 'inline-block';
+        }
+    } else {
+        gameControls.style.display = 'none';
+        gameControls.classList.add('hidden');
+        if (startGameBtn) {
             startGameBtn.disabled = true;
+            startGameBtn.style.display = 'none';
         }
     }
+    console.log('Game controls visibility updated. isHost:', isHost, 'display:', gameControls.style.display);
 }
 
 function switchToLobbyScreen() {
@@ -232,28 +263,48 @@ function switchToLobbyScreen() {
 }
 
 function initializeBoard() {
-    if (!gameState) return;
+    if (!gameState) {
+        console.log('initializeBoard: No gameState');
+        return;
+    }
     
     const width = gameState.width;
     const height = gameState.height;
     
+    if (!width || !height) {
+        console.log('initializeBoard: Invalid dimensions', { width, height });
+        return;
+    }
+    
+    console.log('Initializing board:', { width, height, cellSize, canvasWidth: width * cellSize, canvasHeight: height * cellSize });
+    
     gameBoard.width = width * cellSize;
     gameBoard.height = height * cellSize;
     
+    // Ensure canvas is visible and clickable
+    gameBoard.style.display = 'block';
+    gameBoard.style.pointerEvents = 'auto';
+    
     drawBoard();
+    console.log('Board initialized, canvas size:', gameBoard.width, 'x', gameBoard.height);
 }
 
 function drawBoard() {
+    // No game state yet, don't draw anything
     if (!gameState) {
-        // No game state yet, don't draw anything
+        return;
+    }
+    
+    // Make sure width and height exist - defensive check
+    const width = gameState?.width;
+    const height = gameState?.height;
+    if (!width || !height) {
         return;
     }
     
     if (!gameState.board) {
         // Draw empty board before first click
         const ctx = gameBoard.getContext('2d');
-        const width = gameState.width;
-        const height = gameState.height;
         
         // Make sure canvas is sized
         if (gameBoard.width === 0 || gameBoard.height === 0) {
@@ -279,9 +330,12 @@ function drawBoard() {
         return;
     }
     
+    // Additional defensive check before accessing board properties
+    if (!gameState.board || !gameState.revealed || !gameState.flagged) {
+        return;
+    }
+    
     const ctx = gameBoard.getContext('2d');
-    const width = gameState.width;
-    const height = gameState.height;
     const board = gameState.board;
     const revealed = gameState.revealed;
     const flagged = gameState.flagged;
@@ -339,22 +393,29 @@ function drawBoard() {
 }
 
 function drawCursors() {
-    if (!gameState) return; // Don't draw if no game state
+    // Don't draw if no game state or board not initialized - defensive checks
+    if (!gameState) return;
+    if (typeof gameState.width !== 'number' || typeof gameState.height !== 'number') return;
+    if (gameState.width <= 0 || gameState.height <= 0) return;
     
-    const ctx = gameBoard.getContext('2d');
-    
-    // Redraw board first
-    drawBoard();
-    
-    // Draw other players' cursors
-    cursorPositions.forEach((pos, playerId) => {
-        if (playerId !== socket.id) {
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-            ctx.beginPath();
-            ctx.arc(pos.x, pos.y, 5, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    });
+    try {
+        const ctx = gameBoard.getContext('2d');
+        
+        // Redraw board first
+        drawBoard();
+        
+        // Draw other players' cursors
+        cursorPositions.forEach((pos, playerId) => {
+            if (playerId !== socket.id && pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        });
+    } catch (e) {
+        console.error('Error in drawCursors:', e);
+    }
 }
 
 // Mouse events for game board
@@ -373,7 +434,23 @@ gameBoard.addEventListener('mousemove', (e) => {
 });
 
 gameBoard.addEventListener('click', (e) => {
-    if (!gameState || !currentRoomCode || gameState.gameOver) return;
+    console.log('Click detected on board');
+    if (!gameState) {
+        console.log('No gameState');
+        return;
+    }
+    if (!currentRoomCode) {
+        console.log('No room code');
+        return;
+    }
+    if (gameState.gameOver) {
+        console.log('Game is over');
+        return;
+    }
+    if (!gameState.width || !gameState.height) {
+        console.log('Game not initialized - width:', gameState.width, 'height:', gameState.height);
+        return;
+    }
     
     const rect = gameBoard.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -382,9 +459,15 @@ gameBoard.addEventListener('click', (e) => {
     const col = Math.floor(x / cellSize);
     const row = Math.floor(y / cellSize);
     
-    // Validate bounds
-    if (row < 0 || row >= gameState.height || col < 0 || col >= gameState.width) return;
+    console.log('Click at:', { x, y, row, col, width: gameState.width, height: gameState.height });
     
+    // Validate bounds
+    if (row < 0 || row >= gameState.height || col < 0 || col >= gameState.width) {
+        console.log('Click out of bounds');
+        return;
+    }
+    
+    console.log('Emitting reveal-cell:', { roomCode: currentRoomCode, row, col });
     socket.emit('reveal-cell', {
         roomCode: currentRoomCode,
         row,
@@ -394,7 +477,23 @@ gameBoard.addEventListener('click', (e) => {
 
 gameBoard.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    if (!gameState || !currentRoomCode || gameState.gameOver) return;
+    console.log('Right-click detected on board');
+    if (!gameState) {
+        console.log('No gameState');
+        return;
+    }
+    if (!currentRoomCode) {
+        console.log('No room code');
+        return;
+    }
+    if (gameState.gameOver) {
+        console.log('Game is over');
+        return;
+    }
+    if (!gameState.width || !gameState.height) {
+        console.log('Game not initialized');
+        return;
+    }
     
     const rect = gameBoard.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -404,10 +503,14 @@ gameBoard.addEventListener('contextmenu', (e) => {
     const row = Math.floor(y / cellSize);
     
     // Validate bounds
-    if (row < 0 || row >= gameState.height || col < 0 || col >= gameState.width) return;
+    if (row < 0 || row >= gameState.height || col < 0 || col >= gameState.width) {
+        console.log('Right-click out of bounds');
+        return;
+    }
     
     const currentlyFlagged = gameState.flagged[row][col];
     
+    console.log('Emitting flag-cell:', { roomCode: currentRoomCode, row, col, flagged: !currentlyFlagged });
     socket.emit('flag-cell', {
         roomCode: currentRoomCode,
         row,

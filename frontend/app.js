@@ -1,3 +1,4 @@
+// Version: 2.0.0 - Full Minesweeper Game Logic
 // Get WebSocket server URL from environment or use default
 // For Vercel, this will be set via window.__WS_SERVER_URL__ or use default
 const WS_SERVER_URL = window.__WS_SERVER_URL__ || 'http://localhost:3001';
@@ -36,9 +37,22 @@ let gameState = null;
 let cursorPositions = new Map();
 let cellSize = 30;
 
+// Color scheme for numbers
+const numberColors = [
+    '', // 0 - no color
+    '#0000FF', // 1 - blue
+    '#008000', // 2 - green
+    '#FF0000', // 3 - red
+    '#000080', // 4 - dark blue
+    '#800000', // 5 - maroon
+    '#008080', // 6 - teal
+    '#000000', // 7 - black
+    '#808080'  // 8 - gray
+];
+
 // Socket event handlers
 socket.on('connect', () => {
-    console.log('Connected to server');
+    console.log('Connected to server (Version 2.0.0)');
 });
 
 socket.on('room-created', ({ roomCode }) => {
@@ -83,16 +97,37 @@ socket.on('cursor-update', ({ playerId, x, y }) => {
 socket.on('game-initialized', (state) => {
     gameState = state;
     initializeBoard();
+    gameStatus.textContent = '';
+    gameStatus.className = 'game-status';
 });
 
-socket.on('cell-revealed', ({ row, col, playerId }) => {
-    // Handle cell reveal
-    revealCell(row, col);
+socket.on('cell-revealed', ({ row, col, value, revealed }) => {
+    if (revealed) {
+        gameState.revealed = revealed;
+    } else {
+        gameState.revealed[row][col] = true;
+    }
+    drawBoard();
+    drawCursors();
 });
 
-socket.on('cell-flagged', ({ row, col, flagged, playerId }) => {
-    // Handle cell flag
-    flagCell(row, col, flagged);
+socket.on('cell-flagged', ({ row, col, flagged }) => {
+    gameState.flagged[row][col] = flagged;
+    drawBoard();
+    drawCursors();
+});
+
+socket.on('game-over', ({ won, board, revealed }) => {
+    gameState.board = board;
+    gameState.revealed = revealed;
+    gameState.gameOver = true;
+    gameState.won = won;
+    
+    gameStatus.textContent = won ? '🎉 You Won! 🎉' : '💥 Game Over! 💥';
+    gameStatus.className = won ? 'game-status won' : 'game-status lost';
+    
+    drawBoard();
+    drawCursors();
 });
 
 // UI Event Handlers
@@ -173,21 +208,80 @@ function initializeBoard() {
 }
 
 function drawBoard() {
+    if (!gameState || !gameState.board) {
+        // Draw empty board before first click
+        const ctx = gameBoard.getContext('2d');
+        const width = gameState.width;
+        const height = gameState.height;
+        
+        ctx.clearRect(0, 0, gameBoard.width, gameBoard.height);
+        
+        for (let row = 0; row < height; row++) {
+            for (let col = 0; col < width; col++) {
+                const x = col * cellSize;
+                const y = row * cellSize;
+                
+                ctx.fillStyle = '#c0c0c0';
+                ctx.fillRect(x, y, cellSize, cellSize);
+                
+                ctx.strokeStyle = '#808080';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, cellSize, cellSize);
+            }
+        }
+        return;
+    }
+    
     const ctx = gameBoard.getContext('2d');
     const width = gameState.width;
     const height = gameState.height;
+    const board = gameState.board;
+    const revealed = gameState.revealed;
+    const flagged = gameState.flagged;
     
     ctx.clearRect(0, 0, gameBoard.width, gameBoard.height);
     
-    // Draw grid
     for (let row = 0; row < height; row++) {
         for (let col = 0; col < width; col++) {
             const x = col * cellSize;
             const y = row * cellSize;
             
-            // Draw cell background
-            ctx.fillStyle = '#c0c0c0';
-            ctx.fillRect(x, y, cellSize, cellSize);
+            if (revealed[row][col]) {
+                // Draw revealed cell
+                ctx.fillStyle = '#e0e0e0';
+                ctx.fillRect(x, y, cellSize, cellSize);
+                
+                // Draw mine or number
+                if (board[row][col] === -1) {
+                    // Mine
+                    ctx.fillStyle = '#FF0000';
+                    ctx.beginPath();
+                    ctx.arc(x + cellSize/2, y + cellSize/2, cellSize/3, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (board[row][col] > 0) {
+                    // Number
+                    ctx.fillStyle = numberColors[board[row][col]] || '#000000';
+                    ctx.font = 'bold 20px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(board[row][col], x + cellSize/2, y + cellSize/2);
+                }
+            } else if (flagged[row][col]) {
+                // Draw flagged cell
+                ctx.fillStyle = '#c0c0c0';
+                ctx.fillRect(x, y, cellSize, cellSize);
+                
+                // Draw flag
+                ctx.fillStyle = '#FF0000';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('🚩', x + cellSize/2, y + cellSize/2);
+            } else {
+                // Draw unrevealed cell
+                ctx.fillStyle = '#c0c0c0';
+                ctx.fillRect(x, y, cellSize, cellSize);
+            }
             
             // Draw border
             ctx.strokeStyle = '#808080';
@@ -214,19 +308,9 @@ function drawCursors() {
     });
 }
 
-function revealCell(row, col) {
-    // TODO: Implement cell reveal logic
-    console.log('Revealing cell:', row, col);
-}
-
-function flagCell(row, col, flagged) {
-    // TODO: Implement flag logic
-    console.log('Flagging cell:', row, col, flagged);
-}
-
 // Mouse events for game board
 gameBoard.addEventListener('mousemove', (e) => {
-    if (!currentRoomCode) return;
+    if (!currentRoomCode || !gameState || gameState.gameOver) return;
     
     const rect = gameBoard.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -240,7 +324,7 @@ gameBoard.addEventListener('mousemove', (e) => {
 });
 
 gameBoard.addEventListener('click', (e) => {
-    if (!gameState || !currentRoomCode) return;
+    if (!gameState || !currentRoomCode || gameState.gameOver) return;
     
     const rect = gameBoard.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -248,6 +332,9 @@ gameBoard.addEventListener('click', (e) => {
     
     const col = Math.floor(x / cellSize);
     const row = Math.floor(y / cellSize);
+    
+    // Validate bounds
+    if (row < 0 || row >= gameState.height || col < 0 || col >= gameState.width) return;
     
     socket.emit('reveal-cell', {
         roomCode: currentRoomCode,
@@ -258,7 +345,7 @@ gameBoard.addEventListener('click', (e) => {
 
 gameBoard.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    if (!gameState || !currentRoomCode) return;
+    if (!gameState || !currentRoomCode || gameState.gameOver) return;
     
     const rect = gameBoard.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -267,11 +354,15 @@ gameBoard.addEventListener('contextmenu', (e) => {
     const col = Math.floor(x / cellSize);
     const row = Math.floor(y / cellSize);
     
+    // Validate bounds
+    if (row < 0 || row >= gameState.height || col < 0 || col >= gameState.width) return;
+    
+    const currentlyFlagged = gameState.flagged[row][col];
+    
     socket.emit('flag-cell', {
         roomCode: currentRoomCode,
         row,
         col,
-        flagged: true
+        flagged: !currentlyFlagged
     });
 });
-

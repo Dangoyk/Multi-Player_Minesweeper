@@ -234,11 +234,25 @@ copyRoomCodeBtn.addEventListener('click', async () => {
     }
 });
 
-// Emote system - hold on board to emote
+// Emote system - improved for easier use
 let emoteHoldTimer = null;
 let isHolding = false;
+let radialMenuVisible = false;
 const emoteList = ['😊', '😮', '😱', '🎉', '👍', '👎', '💥', '🔥'];
 let currentEmoteIndex = 0;
+
+// Update emote button display
+function updateEmoteButton() {
+    emoteBtn.textContent = `${emoteList[currentEmoteIndex]} Emotes`;
+    // Highlight selected emote in picker
+    document.querySelectorAll('.emote-btn').forEach((btn, index) => {
+        if (index === currentEmoteIndex) {
+            btn.classList.add('selected');
+        } else {
+            btn.classList.remove('selected');
+        }
+    });
+}
 
 // Emote button (for emote picker)
 emoteBtn.addEventListener('click', () => {
@@ -249,19 +263,40 @@ emoteBtn.addEventListener('click', () => {
 document.querySelectorAll('.emote-btn').forEach((btn, index) => {
     btn.addEventListener('click', () => {
         currentEmoteIndex = index;
+        updateEmoteButton();
         emotePicker.classList.add('hidden');
-        emoteBtn.textContent = `${emoteList[index]} Emotes`;
     });
 });
+
+// Keyboard shortcuts for quick emote selection (1-8)
+document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return; // Don't trigger when typing in inputs
+    
+    const key = parseInt(e.key);
+    if (key >= 1 && key <= 8) {
+        currentEmoteIndex = key - 1;
+        updateEmoteButton();
+        // Quick emote at mouse position if on board
+        if (gameState && !gameState.gameOver) {
+            const rect = gameBoard.getBoundingClientRect();
+            const x = rect.width / 2;
+            const y = rect.height / 2;
+            sendEmote(x, y);
+        }
+    }
+});
+
+// Initialize emote button
+updateEmoteButton();
 
 // Socket handler for receiving emotes
 socket.on('emote-received', ({ emote, playerId, x, y }) => {
     if (playerId !== socket.id) {
-        showEmoteOnBoard(emote, x, y);
+        showEmoteOnBoard(emote, x, y, false);
     }
 });
 
-function showEmoteOnBoard(emote, x, y) {
+function showEmoteOnBoard(emote, x, y, isOwn = false) {
     const bubble = document.createElement('div');
     bubble.className = 'emote-bubble';
     bubble.textContent = emote;
@@ -274,20 +309,69 @@ function showEmoteOnBoard(emote, x, y) {
     bubble.style.position = 'fixed';
     bubble.style.left = (boardRect.left + x) + 'px';
     bubble.style.top = (boardRect.top + y) + 'px';
-    bubble.style.transform = 'translate(-50%, -50%)';
+    bubble.style.transform = 'translate(-50%, -50%) scale(0)';
     bubble.style.pointerEvents = 'none';
     bubble.style.zIndex = '1000';
     
+    // Add player indicator for other players' emotes
+    if (!isOwn) {
+        bubble.classList.add('other-player-emote');
+    }
+    
     document.body.appendChild(bubble);
     
+    // Animate in with bounce
+    requestAnimationFrame(() => {
+        bubble.style.transition = 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        bubble.style.transform = 'translate(-50%, -50%) scale(1)';
+    });
+    
     setTimeout(() => {
-        bubble.remove();
-    }, 2000);
+        bubble.style.transition = 'all 0.3s ease-out';
+        bubble.style.transform = 'translate(-50%, -50%) scale(1.3) translateY(-80px)';
+        bubble.style.opacity = '0';
+        setTimeout(() => {
+            bubble.remove();
+        }, 300);
+    }, 1700);
 }
 
-// Hold to emote on board
+// Send emote function
+function sendEmote(x, y) {
+    if (!currentRoomCode || !gameState || gameState.gameOver) return;
+    
+    const emote = emoteList[currentEmoteIndex];
+    socket.emit('send-emote', {
+        roomCode: currentRoomCode,
+        emote: emote,
+        x: x,
+        y: y
+    });
+    showEmoteOnBoard(emote, x, y, true);
+}
+
+// Middle-click or right-click+shift to quick emote
+gameBoard.addEventListener('auxclick', (e) => {
+    if (e.button === 1) { // Middle mouse button
+        e.preventDefault();
+        if (!gameState || gameState.gameOver) return;
+        
+        const rect = gameBoard.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        if (x >= 0 && x <= gameBoard.width && y >= 0 && y <= gameBoard.height) {
+            sendEmote(x, y);
+        }
+    }
+});
+
+// Hold to show radial emote menu
+let holdStartX = 0;
+let holdStartY = 0;
 gameBoard.addEventListener('mousedown', (e) => {
     if (!gameState || gameState.gameOver) return;
+    if (e.button !== 0) return; // Only left mouse button
     
     const rect = gameBoard.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -296,22 +380,24 @@ gameBoard.addEventListener('mousedown', (e) => {
     // Check if within board bounds
     if (x < 0 || x > gameBoard.width || y < 0 || y > gameBoard.height) return;
     
+    // Don't trigger if it's a click (will be handled by click handler)
     isHolding = true;
+    holdStartX = x;
+    holdStartY = y;
+    
     emoteHoldTimer = setTimeout(() => {
         if (isHolding && currentRoomCode) {
-            const emote = emoteList[currentEmoteIndex];
-            socket.emit('send-emote', {
-                roomCode: currentRoomCode,
-                emote: emote,
-                x: x,
-                y: y
-            });
-            showEmoteOnBoard(emote, rect.left + x, rect.top + y);
+            showRadialEmoteMenu(x, y, rect);
         }
-    }, 500); // Hold for 500ms to trigger emote
+    }, 300); // Hold for 300ms to show radial menu
 });
 
-gameBoard.addEventListener('mouseup', () => {
+gameBoard.addEventListener('mouseup', (e) => {
+    if (radialMenuVisible) {
+        // Radial menu will handle the click
+        return;
+    }
+    
     isHolding = false;
     if (emoteHoldTimer) {
         clearTimeout(emoteHoldTimer);
@@ -324,6 +410,52 @@ gameBoard.addEventListener('mouseleave', () => {
     if (emoteHoldTimer) {
         clearTimeout(emoteHoldTimer);
         emoteHoldTimer = null;
+    }
+    hideRadialMenu();
+});
+
+// Radial emote menu
+function showRadialEmoteMenu(x, y, boardRect) {
+    radialMenuVisible = true;
+    const menu = document.getElementById('radial-emote-menu');
+    if (!menu) return;
+    
+    // Position menu at cursor
+    menu.style.left = (boardRect.left + x) + 'px';
+    menu.style.top = (boardRect.top + y) + 'px';
+    menu.classList.remove('hidden');
+    
+    // Create emote buttons in radial layout
+    menu.innerHTML = '';
+    emoteList.forEach((emote, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'radial-emote-btn';
+        if (index === currentEmoteIndex) {
+            btn.classList.add('selected');
+        }
+        btn.textContent = emote;
+        btn.addEventListener('click', () => {
+            currentEmoteIndex = index;
+            updateEmoteButton();
+            sendEmote(x, y);
+            hideRadialMenu();
+        });
+        menu.appendChild(btn);
+    });
+}
+
+function hideRadialMenu() {
+    radialMenuVisible = false;
+    const menu = document.getElementById('radial-emote-menu');
+    if (menu) {
+        menu.classList.add('hidden');
+    }
+}
+
+// Click outside to close radial menu
+document.addEventListener('click', (e) => {
+    if (radialMenuVisible && !e.target.closest('#radial-emote-menu')) {
+        hideRadialMenu();
     }
 });
 
@@ -605,8 +737,13 @@ gameBoard.addEventListener('mousemove', (e) => {
 });
 
 gameBoard.addEventListener('click', (e) => {
-    // Don't click if we just emoted (hold was released)
-    if (emoteHoldTimer !== null) {
+    // Don't click if radial menu is visible or if we just held
+    if (radialMenuVisible || emoteHoldTimer !== null) {
+        if (emoteHoldTimer) {
+            clearTimeout(emoteHoldTimer);
+            emoteHoldTimer = null;
+        }
+        isHolding = false;
         return;
     }
     

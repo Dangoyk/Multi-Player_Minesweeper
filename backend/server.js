@@ -215,7 +215,7 @@ function checkWin(board, revealed, flagged, width, height, mines) {
 }
 
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+  // Client connected
 
   // Host creates a new game room
   socket.on('host-game', () => {
@@ -236,7 +236,6 @@ io.on('connection', (socket) => {
     rooms.set(roomCode, room);
     socket.join(roomCode);
     socket.emit('room-created', { roomCode });
-    console.log(`Room created: ${roomCode} by ${socket.id}`);
   });
 
   // Player joins an existing room
@@ -264,7 +263,6 @@ io.on('connection', (socket) => {
     
     // Notify other players
     socket.to(roomCode).emit('player-joined', { playerId: socket.id });
-    console.log(`Player ${socket.id} joined room ${roomCode}`);
   });
 
   // Update cursor position
@@ -303,20 +301,8 @@ io.on('connection', (socket) => {
 
   // Handle cell reveal
   socket.on('reveal-cell', ({ roomCode, row, col }) => {
-    console.log('Received reveal-cell:', { roomCode, row, col });
     const room = rooms.get(roomCode);
-    if (!room) {
-      console.log('Room not found:', roomCode);
-      return;
-    }
-    if (!room.gameState) {
-      console.log('No gameState in room');
-      return;
-    }
-    if (room.gameState.gameOver) {
-      console.log('Game is over');
-      return;
-    }
+    if (!room || !room.gameState || room.gameState.gameOver) return;
     
     const { board, revealed, flagged, width, height, mines } = room.gameState;
     
@@ -349,19 +335,15 @@ io.on('connection', (socket) => {
     }
     
     // Reveal cell with flood fill
-    console.log('Revealing cell with flood fill:', { row, col });
     revealCellRecursive(currentBoard, room.gameState.revealed, row, col, width, height);
-    console.log('Revealed array after flood fill:', room.gameState.revealed);
     
     // Check win condition
     if (checkWin(currentBoard, room.gameState.revealed, room.gameState.flagged, width, height, mines)) {
       room.gameState.gameOver = true;
       room.gameState.won = true;
-      console.log('Game won!');
       io.to(roomCode).emit('game-over', { won: true, board: currentBoard, revealed: room.gameState.revealed });
     } else {
       // Send update with full board state
-      console.log('Emitting cell-revealed to room:', roomCode);
       io.to(roomCode).emit('cell-revealed', { 
         row, 
         col, 
@@ -374,12 +356,14 @@ io.on('connection', (socket) => {
   });
 
   // Handle emote
-  socket.on('send-emote', ({ roomCode, emote }) => {
+  socket.on('send-emote', ({ roomCode, emote, x, y }) => {
     const room = rooms.get(roomCode);
     if (room) {
       io.to(roomCode).emit('emote-received', {
         emote,
-        playerId: socket.id
+        playerId: socket.id,
+        x: x || 0,
+        y: y || 0
       });
     }
   });
@@ -410,8 +394,6 @@ io.on('connection', (socket) => {
 
   // Handle disconnect
   socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-    
     // Clean up rooms
     for (const [roomCode, room] of rooms.entries()) {
       if (room.players.includes(socket.id)) {
@@ -420,7 +402,6 @@ io.on('connection', (socket) => {
         
         if (room.players.length === 0) {
           rooms.delete(roomCode);
-          console.log(`Room ${roomCode} deleted (empty)`);
         } else {
           socket.to(roomCode).emit('player-left', { playerId: socket.id });
         }
@@ -432,7 +413,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`WebSocket server running on port ${PORT} (Version 2.0.0)`);
-  console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'Not set (using wildcard)'}`);
-  console.log(`Server listening on 0.0.0.0:${PORT}`);
+  console.log(`WebSocket server running on port ${PORT}`);
 });

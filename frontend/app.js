@@ -33,7 +33,6 @@ const gameStatus = document.getElementById('game-status');
 const copyRoomCodeBtn = document.getElementById('copy-room-code-btn');
 const emoteBtn = document.getElementById('emote-btn');
 const emotePicker = document.getElementById('emote-picker');
-const emoteDisplay = document.getElementById('emote-display');
 const minesRemaining = document.getElementById('mines-remaining');
 
 let currentRoomCode = null;
@@ -57,7 +56,7 @@ const numberColors = [
 
 // Socket event handlers
 socket.on('connect', () => {
-    console.log('Connected to server (Version 3.0.0)');
+    // Connected to server
 });
 
 socket.on('room-created', ({ roomCode }) => {
@@ -117,21 +116,12 @@ socket.on('cursor-update', ({ playerId, x, y }) => {
             drawCursors();
         }
     } catch (e) {
-        console.error('Error drawing cursors:', e);
+        // Error drawing cursors
     }
 });
 
 socket.on('game-initialized', (state) => {
-    console.log('Game initialized:', state);
     gameState = state;
-    console.log('GameState after init:', {
-        width: gameState.width,
-        height: gameState.height,
-        mines: gameState.mines,
-        hasBoard: !!gameState.board,
-        hasRevealed: !!gameState.revealed,
-        hasFlagged: !!gameState.flagged
-    });
     initializeBoard();
     gameStatus.textContent = '';
     gameStatus.className = 'game-status';
@@ -139,37 +129,26 @@ socket.on('game-initialized', (state) => {
 });
 
 socket.on('cell-revealed', ({ row, col, value, revealed, board }) => {
-    console.log('Received cell-revealed event:', { row, col, value, hasRevealedArray: !!revealed, hasBoard: !!board });
     if (!gameState) {
-        console.error('No gameState when receiving cell-revealed');
         return;
     }
     
     // Update board if provided
     if (board) {
         gameState.board = board;
-        console.log('Updated board from server');
     }
     
     // Update revealed array
     if (revealed) {
         gameState.revealed = revealed;
-        console.log('Updated entire revealed array, length:', revealed.length);
     } else if (row !== undefined && col !== undefined) {
         // Update single cell
         if (!gameState.revealed) {
             gameState.revealed = Array(gameState.height).fill(null).map(() => Array(gameState.width).fill(false));
         }
         gameState.revealed[row][col] = true;
-        console.log('Updated single cell:', { row, col });
     }
     
-    console.log('Drawing board after cell reveal, gameState:', {
-        hasBoard: !!gameState.board,
-        hasRevealed: !!gameState.revealed,
-        width: gameState.width,
-        height: gameState.height
-    });
     drawBoard();
     drawCursors();
 });
@@ -255,43 +234,98 @@ copyRoomCodeBtn.addEventListener('click', async () => {
     }
 });
 
-// Emote button
+// Emote system - hold on board to emote
+let emoteHoldTimer = null;
+let isHolding = false;
+const emoteList = ['😊', '😮', '😱', '🎉', '👍', '👎', '💥', '🔥'];
+let currentEmoteIndex = 0;
+
+// Emote button (for emote picker)
 emoteBtn.addEventListener('click', () => {
     emotePicker.classList.toggle('hidden');
 });
 
-// Emote picker buttons
-document.querySelectorAll('.emote-btn').forEach(btn => {
+// Emote picker buttons - select emote to use
+document.querySelectorAll('.emote-btn').forEach((btn, index) => {
     btn.addEventListener('click', () => {
-        const emote = btn.dataset.emote;
-        socket.emit('send-emote', {
-            roomCode: currentRoomCode,
-            emote: emote
-        });
-        showEmote(emote, true);
+        currentEmoteIndex = index;
         emotePicker.classList.add('hidden');
+        emoteBtn.textContent = `${emoteList[index]} Emotes`;
     });
 });
 
 // Socket handler for receiving emotes
-socket.on('emote-received', ({ emote, playerId }) => {
+socket.on('emote-received', ({ emote, playerId, x, y }) => {
     if (playerId !== socket.id) {
-        showEmote(emote, false);
+        showEmoteOnBoard(emote, x, y);
     }
 });
 
-function showEmote(emote, isOwn) {
+function showEmoteOnBoard(emote, x, y) {
     const bubble = document.createElement('div');
     bubble.className = 'emote-bubble';
     bubble.textContent = emote;
-    bubble.style.left = isOwn ? '50%' : Math.random() * 80 + 10 + '%';
-    bubble.style.top = isOwn ? '50%' : Math.random() * 80 + 10 + '%';
-    emoteDisplay.appendChild(bubble);
+    
+    // Position relative to game board
+    const boardRect = gameBoard.getBoundingClientRect();
+    
+    // x and y are already in board coordinates (0 to board width/height)
+    // Convert to screen coordinates
+    bubble.style.position = 'fixed';
+    bubble.style.left = (boardRect.left + x) + 'px';
+    bubble.style.top = (boardRect.top + y) + 'px';
+    bubble.style.transform = 'translate(-50%, -50%)';
+    bubble.style.pointerEvents = 'none';
+    bubble.style.zIndex = '1000';
+    
+    document.body.appendChild(bubble);
     
     setTimeout(() => {
         bubble.remove();
     }, 2000);
 }
+
+// Hold to emote on board
+gameBoard.addEventListener('mousedown', (e) => {
+    if (!gameState || gameState.gameOver) return;
+    
+    const rect = gameBoard.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // Check if within board bounds
+    if (x < 0 || x > gameBoard.width || y < 0 || y > gameBoard.height) return;
+    
+    isHolding = true;
+    emoteHoldTimer = setTimeout(() => {
+        if (isHolding && currentRoomCode) {
+            const emote = emoteList[currentEmoteIndex];
+            socket.emit('send-emote', {
+                roomCode: currentRoomCode,
+                emote: emote,
+                x: x,
+                y: y
+            });
+            showEmoteOnBoard(emote, rect.left + x, rect.top + y);
+        }
+    }, 500); // Hold for 500ms to trigger emote
+});
+
+gameBoard.addEventListener('mouseup', () => {
+    isHolding = false;
+    if (emoteHoldTimer) {
+        clearTimeout(emoteHoldTimer);
+        emoteHoldTimer = null;
+    }
+});
+
+gameBoard.addEventListener('mouseleave', () => {
+    isHolding = false;
+    if (emoteHoldTimer) {
+        clearTimeout(emoteHoldTimer);
+        emoteHoldTimer = null;
+    }
+});
 
 function updateMineCount() {
     if (!gameState) return;
@@ -321,12 +355,10 @@ function updateMineCount() {
 
 startGameBtn.addEventListener('click', () => {
     if (!isHost) {
-        console.log('Only host can start the game');
         return;
     }
     
     if (!currentRoomCode) {
-        console.log('No room code');
         return;
     }
     
@@ -334,12 +366,32 @@ startGameBtn.addEventListener('click', () => {
     const height = parseInt(heightInput.value);
     const mines = parseInt(minesInput.value);
     
+    // Validate inputs
+    if (isNaN(width) || width < 8 || width > 30) {
+        alert('Width must be between 8 and 30');
+        return;
+    }
+    
+    if (isNaN(height) || height < 8 || height > 30) {
+        alert('Height must be between 8 and 30');
+        return;
+    }
+    
+    if (isNaN(mines) || mines < 10) {
+        alert('Mines must be at least 10');
+        return;
+    }
+    
+    const maxMines = Math.floor(width * height * 0.8); // Max 80% of cells can be mines
+    if (mines > maxMines) {
+        alert(`Too many mines! Maximum is ${maxMines} for a ${width}x${height} board.`);
+        return;
+    }
+    
     if (mines >= width * height) {
         alert('Too many mines for the board size!');
         return;
     }
-    
-    console.log('Starting game with:', { roomCode: currentRoomCode, width, height, mines });
     
     socket.emit('init-game', {
         roomCode: currentRoomCode,
@@ -359,7 +411,6 @@ function switchToGameScreen() {
 function updateGameControlsVisibility() {
     const gameControls = document.querySelector('.game-controls');
     if (!gameControls) {
-        console.warn('Game controls element not found');
         return;
     }
     
@@ -378,7 +429,6 @@ function updateGameControlsVisibility() {
             startGameBtn.style.display = 'none';
         }
     }
-    console.log('Game controls visibility updated. isHost:', isHost, 'display:', gameControls.style.display);
 }
 
 function switchToLobbyScreen() {
@@ -390,7 +440,6 @@ function switchToLobbyScreen() {
 
 function initializeBoard() {
     if (!gameState) {
-        console.log('initializeBoard: No gameState');
         return;
     }
     
@@ -398,11 +447,8 @@ function initializeBoard() {
     const height = gameState.height;
     
     if (!width || !height) {
-        console.log('initializeBoard: Invalid dimensions', { width, height });
         return;
     }
-    
-    console.log('Initializing board:', { width, height, cellSize, canvasWidth: width * cellSize, canvasHeight: height * cellSize });
     
     gameBoard.width = width * cellSize;
     gameBoard.height = height * cellSize;
@@ -412,7 +458,6 @@ function initializeBoard() {
     gameBoard.style.pointerEvents = 'auto';
     
     drawBoard();
-    console.log('Board initialized, canvas size:', gameBoard.width, 'x', gameBoard.height);
 }
 
 function drawBoard() {
@@ -560,23 +605,13 @@ gameBoard.addEventListener('mousemove', (e) => {
 });
 
 gameBoard.addEventListener('click', (e) => {
-    console.log('Click detected on board');
-    if (!gameState) {
-        console.log('No gameState');
+    // Don't click if we just emoted (hold was released)
+    if (emoteHoldTimer !== null) {
         return;
     }
-    if (!currentRoomCode) {
-        console.log('No room code');
-        return;
-    }
-    if (gameState.gameOver) {
-        console.log('Game is over');
-        return;
-    }
-    if (!gameState.width || !gameState.height) {
-        console.log('Game not initialized - width:', gameState.width, 'height:', gameState.height);
-        return;
-    }
+    
+    if (!gameState || !currentRoomCode || gameState.gameOver) return;
+    if (!gameState.width || !gameState.height) return;
     
     const rect = gameBoard.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -585,15 +620,11 @@ gameBoard.addEventListener('click', (e) => {
     const col = Math.floor(x / cellSize);
     const row = Math.floor(y / cellSize);
     
-    console.log('Click at:', { x, y, row, col, width: gameState.width, height: gameState.height });
-    
     // Validate bounds
     if (row < 0 || row >= gameState.height || col < 0 || col >= gameState.width) {
-        console.log('Click out of bounds');
         return;
     }
     
-    console.log('Emitting reveal-cell:', { roomCode: currentRoomCode, row, col });
     socket.emit('reveal-cell', {
         roomCode: currentRoomCode,
         row,
@@ -603,23 +634,8 @@ gameBoard.addEventListener('click', (e) => {
 
 gameBoard.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    console.log('Right-click detected on board');
-    if (!gameState) {
-        console.log('No gameState');
-        return;
-    }
-    if (!currentRoomCode) {
-        console.log('No room code');
-        return;
-    }
-    if (gameState.gameOver) {
-        console.log('Game is over');
-        return;
-    }
-    if (!gameState.width || !gameState.height) {
-        console.log('Game not initialized');
-        return;
-    }
+    if (!gameState || !currentRoomCode || gameState.gameOver) return;
+    if (!gameState.width || !gameState.height) return;
     
     const rect = gameBoard.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -630,13 +646,11 @@ gameBoard.addEventListener('contextmenu', (e) => {
     
     // Validate bounds
     if (row < 0 || row >= gameState.height || col < 0 || col >= gameState.width) {
-        console.log('Right-click out of bounds');
         return;
     }
     
     const currentlyFlagged = gameState.flagged[row][col];
     
-    console.log('Emitting flag-cell:', { roomCode: currentRoomCode, row, col, flagged: !currentlyFlagged });
     socket.emit('flag-cell', {
         roomCode: currentRoomCode,
         row,

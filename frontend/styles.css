@@ -360,19 +360,11 @@ header h1 {
 }
 
 /* Emote Display */
-.emote-display {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
-    pointer-events: none;
-}
-
 .emote-bubble {
-    position: absolute;
-    font-size: 2em;
+    font-size: 2.5em;
     animation: emoteFloat 2s ease-out forwards;
     pointer-events: none;
+    user-select: none;
 }
 
 @keyframes emoteFloat {

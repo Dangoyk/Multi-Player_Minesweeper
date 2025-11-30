@@ -5,18 +5,28 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 
 const app = express();
-app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
-  credentials: true
-}));
+
+// Configure CORS - allow all origins for now to ensure WebSocket works
+// In production, you can restrict this to specific domains
+const corsOptions = {
+  origin: true, // Allow all origins
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || '*',
+    origin: true, // Allow all origins for WebSocket
     methods: ['GET', 'POST'],
-    credentials: true
-  }
+    credentials: true,
+    transports: ['websocket', 'polling'],
+    allowEIO3: true
+  },
+  allowEIO3: true
 });
 
 // Store game rooms
@@ -312,6 +322,8 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`WebSocket server running on port ${PORT} (Version 2.0.0)`);
+  console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'Not set (using wildcard)'}`);
+  console.log(`Server listening on 0.0.0.0:${PORT}`);
 });

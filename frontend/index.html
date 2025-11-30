@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Minesweeper</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Multiplayer Minesweeper</h1>
+        </header>
+
+        <!-- Lobby Screen -->
+        <div id="lobby-screen" class="screen active">
+            <div class="lobby-content">
+                <h2>Create or Join a Game</h2>
+                <div class="lobby-buttons">
+                    <button id="host-btn" class="btn btn-primary">Host Game</button>
+                    <button id="join-btn" class="btn btn-secondary">Join Game</button>
+                </div>
+                
+                <div id="join-form" class="join-form hidden">
+                    <input type="text" id="room-code-input" placeholder="Enter room code" maxlength="6">
+                    <button id="join-submit-btn" class="btn btn-primary">Join</button>
+                    <button id="cancel-join-btn" class="btn btn-secondary">Cancel</button>
+                </div>
+
+                <div id="room-info" class="room-info hidden">
+                    <p>Room Code: <strong id="room-code-display"></strong></p>
+                    <p>Share this code with your friend!</p>
+                    <p id="waiting-message" class="waiting">Waiting for player to join...</p>
+                    <p id="ready-message" class="ready hidden">Both players ready!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+            <div class="game-header">
+                <div class="game-info">
+                    <span>Room: <strong id="game-room-code"></strong></span>
+                    <span id="player-count">Players: 1/2</span>
+                </div>
+                <button id="leave-game-btn" class="btn btn-small">Leave Game</button>
+            </div>
+
+            <div class="game-controls">
+                <label>
+                    Width: <input type="number" id="width-input" value="16" min="8" max="30">
+                </label>
+                <label>
+                    Height: <input type="number" id="height-input" value="16" min="8" max="30">
+                </label>
+                <label>
+                    Mines: <input type="number" id="mines-input" value="40" min="10" max="200">
+                </label>
+                <button id="start-game-btn" class="btn btn-primary">Start Game</button>
+            </div>
+
+            <div id="game-board-container">
+                <canvas id="game-board"></canvas>
+            </div>
+
+            <div id="game-status" class="game-status"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <script>
+        // Set WebSocket server URL from environment variable (set in Vercel)
+        // This will be replaced during build or can be set via Vercel environment variables
+        window.__WS_SERVER_URL__ = 'http://localhost:3001'; // Default for local dev
+    </script>
+    <script src="app.js"></script>
+</body>
+</html>
+

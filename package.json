@@ -1,0 +1,15 @@
+{
+  "name": "multiplayer-minesweeper",
+  "version": "1.0.0",
+  "description": "Multiplayer Minesweeper game with real-time updates",
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "npx http-server frontend -p 3000",
+    "install:backend": "cd backend && npm install",
+    "install:all": "npm run install:backend"
+  },
+  "keywords": ["minesweeper", "multiplayer", "websocket", "game"],
+  "author": "",
+  "license": "MIT"
+}
+

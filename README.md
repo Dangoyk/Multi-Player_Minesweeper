@@ -96,8 +96,9 @@ multiplayerminesweeper/
 
 3. **Configure the service**:
    - Railway should auto-detect it's a Node.js project
-   - The `railway.json` config file will handle the build and start commands
-   - Railway will automatically run `npm install` in the backend folder and `npm start`
+   - **Important**: In Railway settings, set the **Root Directory** to `backend`
+   - This tells Railway to treat the `backend` folder as the project root
+   - Railway will automatically run `npm install` and `npm start` in the backend folder
 
 4. **Add environment variables** in Railway:
    - Go to your service → Variables tab

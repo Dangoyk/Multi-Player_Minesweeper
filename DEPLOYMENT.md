@@ -15,10 +15,13 @@ Quick guide to deploy Multiplayer Minesweeper to production.
 1. Go to [railway.app](https://railway.app) and sign in
 2. Click "New Project" → "Deploy from GitHub repo"
 3. Select your repository
-4. Railway will auto-detect Node.js and deploy
-5. Go to **Variables** tab and add:
+4. **IMPORTANT**: Go to **Settings** → **Source** → Set **Root Directory** to `backend`
+5. Railway will auto-detect Node.js and deploy
+6. Go to **Variables** tab and add:
    - `FRONTEND_URL` = `https://placeholder.vercel.app` (we'll update this later)
-6. Copy your Railway URL (e.g., `https://your-app.railway.app`)
+7. Wait for deployment to complete (check logs to ensure it's running)
+8. Go to **Settings** → **Networking** → Click **"Generate Domain"**
+9. Copy your Railway URL (e.g., `https://your-app.railway.app`)
 
 ### 2. Deploy Frontend to Vercel
 
